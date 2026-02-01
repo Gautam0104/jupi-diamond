@@ -1,0 +1,1170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//role enum for customer and retailer
+enum Role {
+  CUSTOMER
+  RETAILER
+}
+
+//state enum for retailer
+enum RetailerState {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+//state enum for user(retailer and customer)
+enum UserStatusEnum {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+//model for retailer
+model Retailer {
+  id                String         @id @default(uuid())
+  name              String
+  email             String
+  phone             String
+  password          String
+  role              Role           @default(RETAILER)
+  businessName      String
+  businessAddress   String
+  gstNumber         String         @unique
+  verificationDocs  String
+  isActive          Boolean        @default(false)
+  isVerifiedEmail   Boolean        @default(false)
+  status            UserStatusEnum @default(ACTIVE)
+  retailerStatus    RetailerState? @default(PENDING)
+  verifyToken       String?
+  verifyTokenExpiry DateTime?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  Session           Session[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // Cart      Cart[]
+  // Order     Order[]
+}
+
+//model for customer
+model Customer {
+  id                String         @id @default(uuid())
+  firstName         String
+  lastName          String
+  email             String
+  countryCode       String?
+  phone             String
+  alternatePhone    String?
+  gender            String?
+  dob               DateTime?
+  password          String
+  profileImage      String?
+  bio               String?
+  role              Role?          @default(CUSTOMER)
+  businessName      String?
+  businessAddress   String?
+  gstNumber         String?        @unique
+  verificationDocs  String?
+  retailerStatus    RetailerState? @default(PENDING)
+  isVerifiedEmail   Boolean        @default(false)
+  status            UserStatusEnum @default(ACTIVE)
+  verifyToken       String?
+  verifyTokenExpiry DateTime?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  Session           Session[]
+  address           Address[]
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  Cart          Cart[]
+  Order         Order[]
+  ProductReview ProductReview[]
+  ReviewComment ReviewComment[]
+  CouponUsage   CouponUsage[]
+  // Gift cards assigned to this customer
+  GiftCards     GiftCard[]      @relation("AssignedGiftCards")
+
+  // Gift cards redeemed by this customer
+  RedeemedGiftCards GiftCard[] @relation("RedeemedGiftCards")
+  wishlist          Wishlist[]
+
+  @@index([firstName, phone, lastName, email])
+}
+
+model GiftCard {
+  id           String    @id @default(uuid())
+  code         String    @unique
+  value        Float // Voucher amount
+  currency     String    @default("INR")
+  isRedeemed   Boolean   @default(false)
+  expiresAt    DateTime?
+  assignedToId String
+  assignedTo   Customer  @relation("AssignedGiftCards", fields: [assignedToId], references: [id])
+  order        Order?
+
+  redeemedById String?
+  redeemedBy   Customer? @relation("RedeemedGiftCards", fields: [redeemedById], references: [id])
+  createdById  String? // Admin who issued it
+  createdBy    Admin?    @relation(fields: [createdById], references: [id])
+
+  orderId    String? // Order ID if redeemed during checkout
+  redeemedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+// enum AddressTypeEnum {
+//   SHIPPING
+//   BILLING
+// }
+model Banner {
+  id          String   @id @default(uuid())
+  title       String
+  subtitle    String?
+  imageUrl    String
+  mobileFiles String?
+  redirectUrl String?
+  buttonName  String?
+  position    Int      @default(autoincrement())
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum addressType {
+  OFFICE
+  HOME
+}
+
+//shipping address for customer and retailer
+model Address {
+  id          String       @id @default(uuid())
+  houseNo     String
+  landMark    String
+  street      String
+  postalCode  String
+  city        String
+  state       String
+  country     String
+  phone       String?
+  gstNumber   String?
+  panNumber   String?
+  isBilling   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId  String?
+  addressType addressType?
+  Order       Order[]
+}
+
+//schema for session
+model Session {
+  sid     String   @id @default(uuid()) // Session ID
+  adminId String?
+  admin   Admin?   @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  sess    Json
+  expire  DateTime
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId String?
+  retailer   Retailer? @relation(fields: [retailerId], references: [id], onDelete: Cascade)
+  retailerId String?
+}
+
+//schema for admin
+model Admin {
+  id       String    @id @default(uuid())
+  name     String
+  email    String    @unique
+  password String
+  // role     String    @default("ADMIN")
+  isActive Boolean   @default(true)
+  Session  Session[]
+
+  verifyToken         String?
+  verifyTokenExpiry   DateTime?
+  resetToken          String?
+  resetTokenExpiry    DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  role                Roles?                @relation(fields: [rolesId], references: [id])
+  rolesId             String?
+  extraPermissions    Permission[]
+  BlogPost            BlogPost[]
+  MetalVariantHistory MetalVariantHistory[]
+  gemstoneUpdates     GemstoneHistory[]     @relation("AdminToGemstoneHistories")
+  GiftCard            GiftCard[]
+}
+
+model Roles {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  admins      Admin[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id        String   @id @default(uuid())
+  name      String   @unique // Example: "ADD_COURSE"
+  label     String // Example: "Add Course"
+  module    String // Example: "Course", "Student"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roles  RolePermission[]
+  admins Admin[]
+}
+
+model RolePermission {
+  id           String @id @default(uuid())
+  roleId       String
+  permissionId String
+
+  role       Roles      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+//schema for metal type like gold, silver and platinum etc
+enum MetalTypeEnum {
+  GOLD
+  SILVER
+  PLATINUM
+}
+
+//schema for metal type like gold, silver and platinum etc
+model MetalType {
+  id            String         @id @default(uuid())
+  metalTypeSlug String         @unique
+  name          MetalTypeEnum  @unique // Gold, Silver, Platinum
+  metalVariants MetalVariant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+//metalcolor schema
+model MetalColor {
+  id             String              @id @default(uuid())
+  metalColorSlug String              @unique
+  name           String              @unique // Rose Gold, Yellow, etc.
+  colorVariant   MetalColorVariant[]
+  productVariant ProductVariant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+//metal colorVariant combination schema
+model MetalColorVariant {
+  id                  String                @unique @default(uuid())
+  metalVariantId      String
+  metalVariant        MetalVariant          @relation(fields: [metalVariantId], references: [id], onDelete: Cascade)
+  metalColorId        String
+  metalColor          MetalColor            @relation(fields: [metalColorId], references: [id], onDelete: Cascade)
+  ProductVariantImage ProductVariantImage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+//metal variant schema
+model MetalVariant {
+  id                String              @id @default(uuid())
+  metalVariantSlug  String              @unique
+  metalType         MetalType           @relation(fields: [metalTypeId], references: [id], onDelete: Cascade)
+  metalTypeId       String
+  purityLabel       String // 24K, 950 etc.x
+  metalPriceInGram  Float
+  byBackPrice       Float?              @default(0)
+  productVariants   ProductVariant[]
+  MetalColorVariant MetalColorVariant[]
+
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  MakingChargeWeightRange MakingChargeWeightRange[]
+  metalHistory            MetalVariantHistory[]
+
+  @@index([metalTypeId, purityLabel])
+}
+
+model MetalVariantHistory {
+  id               String   @id @default(uuid())
+  metalVariantId   String // FK reference to original MetalVariant
+  metalTypeId      String
+  purityLabel      String
+  metalPriceInGram Float
+  byBackPrice      Float?
+  staffId          String
+  updatedBy        Admin    @relation(fields: [staffId], references: [id])
+  updatedAt        DateTime @default(now())
+
+  metalVariant MetalVariant @relation(fields: [metalVariantId], references: [id], onDelete: Cascade)
+
+  @@index([metalVariantId])
+}
+
+//gemstoneType enum
+enum GemstoneCategoryEnum {
+  DIAMOND
+  GEMSTONE
+}
+
+//gemstonetype schema
+model GemstoneType {
+  id               String            @id @default(uuid())
+  gemstoneTypeSlug String            @unique
+  name             String            @unique // Diamond, Ruby, Sapphire
+  gemstoneVariants GemstoneVariant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+//gemstone Color
+model GemstoneColor {
+  id                   String                 @id @default(uuid())
+  gemstoneColorSlug    String                 @unique
+  name                 String                 @unique
+  GemstoneColorVariant GemstoneColorVariant[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@index([name])
+}
+
+//gemstone colorVariant combination schema
+model GemstoneColorVariant {
+  id                  String                @id @default(uuid())
+  gemstoneVariantId   String
+  gemstoneColorId     String
+  gemstoneColor       GemstoneColor         @relation(fields: [gemstoneColorId], references: [id], onDelete: Cascade)
+  ProductVariantImage ProductVariantImage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum GemstoneOrigin {
+  NATURAL
+  LAB_GROWN
+  TREATED
+  SYNTHETIC
+  MOISSANITE
+}
+
+//schema for gemstoneVariant
+model GemstoneVariant {
+  id                  String            @id @default(uuid())
+  gemstoneVariantSlug String            @unique
+  gemstoneType        GemstoneType      @relation(fields: [gemstoneTypeId], references: [id], onDelete: Cascade)
+  origin              GemstoneOrigin?
+  gemstoneTypeId      String
+  clarity             String // VVS1, VVS2, VS1 etc.
+  cut                 String // Excellent, Very Good, Good (used in diamond grading)
+  color               String?
+  gemstonePrice       Float
+  shape               String? // Round, Oval, Cushion
+  height              Float?
+  width               Float?
+  depth               Float?
+  certification       String? // GIA, IGI, BIS, None
+  certificateNumber   String?
+  productVariant      ProductVariant[]
+  imageUrl            String?
+  certificateUrl      String?
+  gemstoneHistory     GemstoneHistory[]
+
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  MakingChargeWeightRange MakingChargeWeightRange[]
+
+  @@index([gemstoneTypeId, clarity, cut, gemstonePrice])
+}
+
+model GemstoneHistory {
+  id                   String   @id @default(uuid()) // Unique identifier for each history record
+  gemstoneVariantId    String
+  gemstoneTypeId       String
+  colorLabel           String?
+  clarityLabel         String
+  gemstonePriceInCarat Float
+  byBackPrice          Float?
+  staffId              String
+  updatedBy            Admin    @relation("AdminToGemstoneHistories", fields: [staffId], references: [id])
+  updatedAt            DateTime @default(now()) // Timestamp when the record was updated
+
+  gemstoneVariant GemstoneVariant @relation(fields: [gemstoneVariantId], references: [id], onDelete: Cascade) // Relation to original GemstoneVariant
+
+  @@index([gemstoneVariantId]) // Index for fast lookups by gemstone variant ID
+}
+
+//schema for jewelary type like  ring, necklace, bracelete, earring, toe Ring, Anclets, nose jewelry
+model JewelryType {
+  id              String               @id @default(uuid())
+  jewelryTypeSlug String               @unique
+  name            String               @unique // ring, necklace, bracelete, earring, toe Ring, Anclets, nose jewelry
+  imageUrl        String?
+  isActive        Boolean              @default(true)
+  displayOrder    Int?                 @default(autoincrement())
+  products        Product[]
+  size            ProductVariantSize[]
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  productStyle ProductStyle[]
+
+  @@index([name])
+}
+
+//enum for gender
+enum GenderEnum {
+  MEN
+  WOMEN
+  UNISEX
+}
+
+//collection for men/women/kids
+model Collection {
+  id             String      @id @default(uuid())
+  collectionSlug String      @unique
+  name           String      @unique // more flexibility than enum
+  gender         GenderEnum?
+  description    String?
+  bannerImage    String?
+  thumbnailImage String?
+  displayOrder   Int?        @default(autoincrement())
+  products       Product[]   @relation("ProductToCollection")
+
+  status Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+//enum for size unit
+enum SizeUnit {
+  MM
+  CM
+  US
+  INCH
+  IN //ad Indian size
+}
+
+//schema for product size
+model ProductVariantSize {
+  id              String   @id @default(uuid())
+  productSizeSlug String   @unique
+  label           Float? //"6", "7", "8" etc
+  labelSize       String? // 2-2, 2-4, etc
+  unit            SizeUnit //"MM", CM, INCH etc
+  circumference   String? // Optional circumference for rings, e.g., "23.5 cm"
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  ProductVariant ProductVariant[] @relation("productSize")
+  JewelryType    JewelryType?     @relation(fields: [jewelryTypeId], references: [id])
+  jewelryTypeId  String?
+  CartItem       CartItem[]
+
+  @@index([label, unit])
+}
+
+//schema for product style
+model ProductStyle {
+  id               String       @id @default(uuid())
+  productStyleSlug String       @unique
+  name             String       @unique
+  description      String?
+  imageUrl         String?
+  isActive         Boolean      @default(true)
+  displayOrder     Int?         @default(autoincrement())
+  products         Product[]    @relation("ProductToProductStyle")
+  // jewelryType      JewelryType[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  jewelryType      JewelryType? @relation(fields: [jewelryTypeId], references: [id])
+  jewelryTypeId    String?
+
+  @@index([name, productStyleSlug])
+}
+
+//schema for product occasion
+model Occasion {
+  id           String  @id @default(uuid())
+  occasionSlug String  @unique
+  name         String  @unique //wedding, casual, birthday, anniversary, christmas, new_year,engagement
+  description  String? // Optional short text like "Perfect for your special day"
+  imageUrl     String?
+
+  product   Product[] @relation("ProductToOccasion")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  isActive  Boolean   @default(true)
+
+  @@index([name])
+}
+
+//schema for product image
+model ProductVariantImage {
+  id                     String                @id @default(uuid())
+  imageUrl               String
+  productVariantId       String?
+  productVariant         ProductVariant?       @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  metalColorVariantId    String?
+  metalColorVariant      MetalColorVariant?    @relation(fields: [metalColorVariantId], references: [id], onDelete: Cascade)
+  gemstoneColorVariantId String?
+  gemstoneColorVariant   GemstoneColorVariant? @relation(fields: [gemstoneColorVariantId], references: [id], onDelete: Cascade)
+  displayOrder           Int                   @default(0)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@index([productVariantId, metalColorVariantId, gemstoneColorVariantId])
+}
+
+model KarigarDetails {
+  id        String  @id @default(uuid())
+  name      String
+  email     String? @unique
+  phone     String? @unique
+  location  String? // e.g., "Surat", "Jaipur"
+  expertise String? // e.g., "Meenakari", "Kundan", etc.
+  bio       String?
+  imageUrl  String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants ProductVariant[] // Reverse relation
+}
+
+//schema for product
+model ProductVariant {
+  id                        String                   @id @default(uuid())
+  productVariantSlug        String                   @unique
+  productVariantTitle       String?
+  numberOfDiamonds          Int?                     @default(0)
+  numberOfSideDiamonds      Int?                     @default(0)
+  sideDiamondPriceCarat     Float?                   @default(0)
+  sideDiamondWeight         Float?                   @default(0)
+  sideDiamondQuality        String?                  @default("Good")
+  totalPriceSideDiamond     Float?                   @default(0)
+  numberOfgemStones         Int?                     @default(0)
+  isLockPrice               Boolean                  @default(false)
+  metalVariantId            String?
+  metalVariant              MetalVariant?            @relation(fields: [metalVariantId], references: [id])
+  gemstoneVariantId         String?
+  gemstoneVariant           GemstoneVariant?         @relation(fields: [gemstoneVariantId], references: [id])
+  metalWeightInGram         Float?
+  gemstoneWeightInCarat     Float?
+  products                  Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productSize               ProductVariantSize[]     @relation("productSize")
+  productId                 String
+  sellingPrice              Float                    @default(0)
+  metalPrice                Float?
+  diamondPrice              Float?
+  finalPrice                Float?
+  grossWeight               Float?
+  makingChargePrice         Float?
+  productVariantImage       ProductVariantImage[]
+  stock                     Int                      @default(0)
+  sku                       String?                  @unique
+  length                    String?
+  width                     String?
+  height                    String?
+  gst                       Int                      @default(0)
+  isActive                  Boolean                  @default(false)
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  CartItem                  CartItem[]
+  Wishlist                  Wishlist[]
+  MakingChargeWeightRange   MakingChargeWeightRange? @relation(fields: [makingChargeWeightRangeId], references: [id])
+  makingChargeWeightRangeId String?
+  Karigar                   KarigarDetails?          @relation(fields: [karigarId], references: [id])
+  karigarId                 String?
+  isFeatured                Boolean?                 @default(false)
+  isNewArrival              Boolean?                 @default(false)
+  newArrivalUntil           DateTime?
+  returnPolicyText          String?
+  note                      String?
+  sellingOutOfStock         Boolean                  @default(false)
+  isGift                    Boolean                  @default(false)
+  // OrderItem                 OrderItem[]
+  GlobalDiscount            GlobalDiscount?          @relation(fields: [globalDiscountId], references: [id], onDelete: Cascade)
+  globalDiscountId          String?
+  ScrewOption               ScrewOption[]
+  ProductReview             ProductReview[]
+  metalColor                MetalColor?              @relation(fields: [metalColorId], references: [id])
+  metalColorId              String?
+  dailyWear                 DailyWear                @default(WORK_WEAR)
+
+  @@index([productId, metalVariantId, gemstoneVariantId])
+}
+
+//schema for product
+model Product {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  productSlug     String           @unique
+  // productImage    String?
+  description     String?
+  jewelryType     JewelryType      @relation(fields: [jewelryTypeId], references: [id], onDelete: Cascade)
+  jewelryTypeId   String
+  collection      Collection[]     @relation("ProductToCollection")
+  collectionId    String?
+  productVariant  ProductVariant[]
+  productStyle    ProductStyle[]   @relation("ProductToProductStyle")
+  productStyleId  String?
+  metaTitle       String? // SEO meta title
+  metaDescription String? // SEO meta description
+  metaKeywords    String[] // ["ring", "18k", "wedding"]
+
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  tags       String[]
+  occasion   Occasion[] @relation("ProductToOccasion")
+  occasionId String?
+
+  @@index([name, collectionId, jewelryTypeId, productSlug])
+}
+
+model ScrewOption {
+  id               String     @id @default(uuid())
+  productVariantId String
+  screwType        String // e.g., "Push-back", "Screw-back"
+  screwMaterial    String?
+  isDetachable     Boolean?
+  notes            String?
+  cartItems        CartItem[]
+
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productVariantId, screwType])
+}
+
+//enum for making charges
+enum MakingChargesType {
+  FIXED
+  PERCENTAGE
+  PER_GRAM_WEIGHT
+}
+
+//enum for making charges
+enum MakingChargesDiscountType {
+  FIXED
+  PERCENTAGE
+}
+
+//enum for making charges
+enum MakingChargeCategory {
+  METAL
+  GEMSTONE
+  COMBINED
+}
+
+model MakingChargeCategorySet {
+  id                      String                    @unique @default(uuid())
+  category                String                    @unique //MakingChargeCategory // METAL or GEMSTONE
+  description             String?
+  makingChargeWeightRange MakingChargeWeightRange[]
+  createdAt               DateTime?                 @default(now())
+  updatedAt               DateTime?                 @updatedAt
+}
+
+model MakingChargeWeightRange {
+  id                        String                     @unique @default(uuid())
+  chargeCategory            MakingChargeCategory // METAL or GEMSTONE
+  chargeType                MakingChargesType // FIXED, PERCENTAGE, PER_WEIGHT
+  globalMakingChargeSlug    String                     @unique
+  metalVariant              MetalVariant?              @relation(fields: [metalVariantId], references: [id], onDelete: Cascade)
+  metalVariantId            String?
+  gemstoneVariantId         String?
+  gemstoneVariant           GemstoneVariant?           @relation(fields: [gemstoneVariantId], references: [id], onDelete: Cascade)
+  minWeight                 Float?                     @default(0)
+  maxWeight                 Float?                     @default(0)
+  chargeValue               Float // e.g., 300 per gram or 10% or fixed 1000
+  discountType              MakingChargesDiscountType? // Optional discount
+  discountValue             Float? // e.g., 10%, or ₹200 off
+  isActive                  Boolean                    @default(true) // For toggling old charges
+  productVariant            ProductVariant[]
+  MakingChargeCategorySet   MakingChargeCategorySet?   @relation(fields: [makingChargeCategorySetId], references: [id])
+  makingChargeCategorySetId String?
+  createdAt                 DateTime?                  @default(now())
+  updatedAt                 DateTime?                  @updatedAt
+}
+
+enum DiscountType {
+  FIXED // ₹500 off
+  PERCENTAGE // 10% off
+}
+
+model GlobalDiscount {
+  id             String           @id @default(uuid())
+  title          String           @unique // Name of the discount like "Festive Offer", "Summer Sale"
+  description    String?
+  discountType   DiscountType
+  discountValue  Float
+  isActive       Boolean          @default(true)
+  validFrom      DateTime?
+  validTo        DateTime?
+  priority       Int              @default(autoincrement())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  ProductVariant ProductVariant[]
+}
+
+//schema for coupon
+model Coupon {
+  id            String                     @id @default(uuid())
+  couponSlug    String                     @unique
+  code          String                     @unique
+  discountType  MakingChargesDiscountType?
+  discountValue Float
+  validFrom     DateTime?
+  validTo       DateTime?
+  isActive      Boolean?                   @default(true)
+
+  usageLimit        Int?
+  usedCount         Int  @default(0)
+  usageLimitPerUser Int?
+
+  minCartValue Float?
+
+  createdAt   DateTime?     @default(now())
+  updatedAt   DateTime?     @updatedAt
+  Cart        Cart[]
+  CouponUsage CouponUsage[]
+
+  @@index([code, discountType, discountValue])
+}
+
+model CouponUsage {
+  id       String   @id @default(uuid())
+  couponId String
+  userId   String
+  usedAt   DateTime @default(now())
+
+  coupon Coupon   @relation(fields: [couponId], references: [id])
+  user   Customer @relation(fields: [userId], references: [id])
+
+  @@unique([couponId, userId])
+}
+
+// Cart table
+model Cart {
+  id         String     @id @default(uuid())
+  cartSlug   String     @unique
+  customerId String?    @unique
+  customer   Customer?  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  sessionId  String?
+
+  appliedCouponId String?
+  appliedCoupon   Coupon? @relation(fields: [appliedCouponId], references: [id], onDelete: SetNull)
+  discountAmount  Float? // Discount amount from applied coupon
+  totalAmount     Float? // Sum of cart items
+  finalAmount     Float? // totalAmount - discountAmount
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+// CartItem table
+model CartItem {
+  id               String              @id @default(uuid())
+  cartItemSlug     String              @unique
+  cartId           String
+  cart             Cart                @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productVariantId String
+  productVariant   ProductVariant      @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  quantity         Int                 @default(1)
+  productSize      ProductVariantSize? @relation(fields: [productSizeId], references: [id])
+  productSizeId    String?
+  screwOption      ScrewOption?        @relation(fields: [screwOptionId], references: [id])
+  screwOptionId    String?
+  optionType       OptionType?         @default(SIZE)
+  priceAtAddition  Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([cartId, productVariantId]) // Ensure no duplicate product variants in the same cart
+}
+
+model Wishlist {
+  id               String         @id @default(uuid())
+  userType         Role?
+  productVariantId String
+  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+  Customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId String?
+
+  @@unique([productVariantId, userType])
+}
+
+model Order {
+  id                 String               @id @default(uuid())
+  orderNumber        String               @unique
+  customerId         String?
+  customer           Customer?            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  addressId          String?
+  address            Address?             @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  addressSnapshot    Json? // Store full address used in order
+  status             OrderStatusEnum      @default(PENDING)
+  paymentStatus      PaymentStatusEnum    @default(PENDING)
+  paymentMethod      PaymentMethodEnum
+  transactionId      String?
+  razorpayOrderId    String?
+  payPalOrderId      String?
+  isPaid             Boolean              @default(false)
+  paidAt             DateTime?
+  gatewayResponse    Json?
+  cancelledReason    String? // ✅ Add this line
+  giftCardId         String?              @unique
+  giftCard           GiftCard?            @relation(fields: [giftCardId], references: [id], onDelete: SetNull)
+  totalAmount        Float
+  gstAmount          Float?               @default(0)
+  discountAmount     Float?               @default(0)
+  finalAmount        Float
+  finalAmountInInr   Float?
+  finalAmountInUsd   Float?
+  refundAmount       Float?               @default(0)
+  couponId           String?
+  // coupon   Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  code               String?
+  discountType       String?
+  refundReason       String?
+  orderCurrency      String?
+  discountValue      Float?
+  orderItems         OrderItem[]
+  paymentHistory     PaymentHistory?      @relation("OrderPayment")
+  paymentId          String?              @unique
+  refundId           String?              @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @default(now()) @updatedAt
+  OrderStatusHistory OrderStatusHistory[]
+  returnRequest      ReturnRequest[]
+
+  expectedDeliveryDate DateTime?
+
+  @@index([status, paymentMethod, paymentStatus])
+}
+
+model OrderStatusHistory {
+  id          String          @id @default(uuid())
+  orderId     String?
+  order       Order?          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status      OrderStatusEnum
+  updatedAt   DateTime        @default(now())
+  OrderItem   OrderItem?      @relation(fields: [orderItemId], references: [id])
+  orderItemId String?
+}
+
+model OrderItem {
+  id               String          @id @default(uuid())
+  orderId          String
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  jewelryType      String?
+  jewelryTypeId    String?
+  styleId          String[]
+  styleName        String?
+  occasion         String?
+  occasionId       String?
+  collection       String?
+  collectionId     String?
+  productVariantId String?
+  status           OrderStatusEnum @default(PENDING)
+  // productVariant   ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  quantity         Int             @default(1)
+  priceAtPurchase  Float
+  discountValue    Int             @default(0)
+  gst              Int             @default(0)
+  total            Float
+
+  productName               String?
+  metalType                 String?
+  purityLabel               String?
+  metalColorName            String?
+  metalPrice                Float?
+  metalWeight               Float?
+  origin                    String?
+  gemstoneShape             String?
+  gemstoneType              String?
+  gemstoneClarity           String?
+  gemstoneCut               String?
+  gemstoneColor             String?
+  gemstoneCenterCaratWeight Float?
+  gemstoneSideCaratWeight   Float?
+  sideStonePrice            Float?
+  gemstonePrice             Float?
+  certification             String?
+  cancelledReason           String?
+  imageUrl                  String?
+  size                      String?
+  couponName                String?
+  couponDiscountValue       Float?
+  discountName              String?
+  grossWeight               Float?
+  gstValue                  Float?
+  orderStatusHistory        OrderStatusHistory[]
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @default(now()) @updatedAt
+  ProductReview             ProductReview?
+}
+
+model ReturnRequest {
+  id         String   @id @default(uuid())
+  orderId    String?
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  photos     String[] // This is the correct way to declare an array of strings
+  isApproved Boolean  @default(false)
+  reason     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model ProductReview {
+  id String @id @default(uuid())
+
+  productVariantId String
+  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  orderItemId String    @unique
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  rating          Int // 1 to 5 stars
+  reviewTitle     String?
+  reviewBody      String?
+  images          String[] // optional image URLs
+  isVerifiedBuyer Boolean  @default(true)
+  isApproved      Boolean  @default(true)
+  isFeatured      Boolean  @default(false)
+  helpfulCount    Int      @default(0)
+  reported        Boolean  @default(false)
+
+  reviewComments ReviewComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productVariantId, isApproved])
+}
+
+model ReviewComment {
+  id       String        @id @default(uuid())
+  reviewId String
+  review   ProductReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  commenterId String
+  commenter   Customer @relation(fields: [commenterId], references: [id], onDelete: Cascade)
+
+  comment      String
+  isAdminReply Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentHistory {
+  id                String            @id @default(uuid())
+  orderId           String            @unique
+  order             Order             @relation("OrderPayment", fields: [orderId], references: [id], onDelete: Cascade)
+  paymentMethod     PaymentMethodEnum
+  transactionId     String?
+  razorpayPaymentId String?
+  razorpayOrderId   String?
+  razorpaySignature String?
+  amountPaid        Float
+  currency          String            @default("INR")
+  status            PaymentStatusEnum @default(PENDING)
+  gatewayResponse   Json?
+  attemptNumber     Int               @default(1)
+  refunded          Boolean           @default(false)
+  paidAt            DateTime?
+  refundedAt        DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @default(now()) @updatedAt
+}
+
+model ContactMessage {
+  id        String               @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String?
+  message   String
+  status    ContactMessageStatus @default(PENDING)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([email])
+  @@index([status])
+}
+
+enum ContactMessageStatus {
+  PENDING
+  RESPONDED
+  CLOSED
+}
+
+model FooterImportantLinkCMS {
+  id        String   @id @default(uuid())
+  slug      String   @unique // e.g., "privacy-policy", "terms-and-conditions"
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Currency {
+  id           String   @id @default(uuid())
+  name         String
+  code         String   @unique
+  symbol       String
+  exchangeRate Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model shippingCharge {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  price     Float?   @default(0)
+  content   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  slug        String     @unique
+  isActive    Boolean    @default(true)
+  imageUrl    String?
+  blogs       BlogPost[]
+}
+
+model BlogPost {
+  id          String    @id @default(uuid())
+  title       String
+  slug        String    @unique
+  description String?
+  content     String
+  coverImage  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  authorId String
+  author   Admin  @relation(fields: [authorId], references: [id])
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  isActive   Boolean  @default(false)
+  isFeatured Boolean  @default(true)
+}
+
+model Notification {
+  id            String               @id @default(uuid())
+  title         String
+  message       String
+  type          NotificationType
+  status        NotificationStatus   @default(UNREAD)
+  referenceId   String?
+  referenceType ReferenceEntityType?
+  createdAt     DateTime             @default(now())
+  readAt        DateTime?
+  url           String?
+  isDeleted     Boolean              @default(false)
+}
+
+enum NotificationType {
+  STOCK_ALERT
+  ORDER_PLACED
+  ORDER_CANCELLED
+  RETURN_REQUEST
+  CUSTOM_MESSAGE
+}
+
+enum NotificationStatus {
+  READ
+  UNREAD
+}
+
+enum ReferenceEntityType {
+  PRODUCT_VARIANT
+  ORDER
+  CUSTOMER
+  SYSTEM
+}
+
+enum OrderStatusEnum {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURN_REQUESTED
+  RETURN_APPROVED
+  RETURNED
+  REFUNDED
+}
+
+enum PaymentStatusEnum {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum DailyWear {
+  WORK_WEAR
+  EVERYDAY_WEAR
+  PARTY_WEAR
+  STATEMENT_WEAR
+}
+
+enum PaymentMethodEnum {
+  RAZORPAY
+  PAYPAL
+  COD
+}
+
+enum OptionType {
+  SIZE
+  SCREW_OPTION
+}

@@ -1,0 +1,14 @@
+==========================================Exact Calculation==============================================
+Product: Gold Ring
+Metal: 22K, 10g @ ₹5000/g = ₹50,000
+Gemstone: Sapphire, 5ct @ ₹3000/ct = ₹15,000
+Base Cost: ₹65,000
+
+Making Charge Type: 10% of Base = ₹6,500 // Percent 2- Fixed
+Discount on Making: 5% = ₹325
+Net Making Charge = ₹6,175
+
+Subtotal before GST = ₹71,175
+GST @ 3% = ₹2,135.25
+
+Final Price = ₹73,310.25

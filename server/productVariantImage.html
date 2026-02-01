@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload Product Variant Images</title>
+</head>
+<body>
+  <h1>Upload Product Variant Images</h1>
+  <form action="http://localhost:8000/product-variant-image/create" method="POST" enctype="multipart/form-data">
+    <label>Product Variant ID:</label><br />
+    <input type="text" name="productVariantId" required /><br /><br />
+
+    <label>Metal Color Variant ID:</label><br />
+    <input type="text" name="metalColorVariantId" required /><br /><br />
+
+    <label>Gemstone Color Variant ID:</label><br />
+    <input type="text" name="gemstoneColorVariantId" required /><br /><br />
+
+    <label>Upload Images:</label><br />
+    <input type="file" name="images" multiple required /><br /><br />
+
+    <button type="submit">Upload</button>
+  </form>
+</body>
+</html>
